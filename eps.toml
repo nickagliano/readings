@@ -1,10 +1,11 @@
 [package]
 name        = "readings"
-version     = "0.1.0"
+version     = "0.1.1"
 description = "Texts you the Catholic daily Mass readings every morning at 7am ET"
 authors     = ["nickagliano"]
 license     = "MIT"
 platform    = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu"]
+repository  = "https://github.com/nickagliano/readings"
 
 [eps]
 customization_guide = "CUSTOMIZE.md"
