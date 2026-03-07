@@ -4,6 +4,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use tower_http::trace::TraceLayer;
 use chrono::Utc;
 use chrono_tz::America::New_York;
 use serde::Deserialize;
@@ -30,13 +31,15 @@ struct DayReadings {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
     dotenvy::dotenv().ok();
 
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(5545);
 
     let app = Router::new()
         .route("/", get(index))
-        .route("/health", get(health));
+        .route("/health", get(health))
+        .layer(TraceLayer::new_for_http());
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let listener = tokio::net::TcpListener::bind(format!("{host}:{port}")).await.unwrap();
@@ -117,7 +120,7 @@ fn render_section(label: &str, r: &Reading) -> String {
 }
 
 fn render_html(data: &DayReadings) -> String {
-    let day  = html_escape(&clean_text(&data.day));
+    let day  = clean_text(&data.day); // preserve HTML entities (e.g. &#160;) — clean_text already strips tags
     let date = Utc::now().with_timezone(&New_York).format("%A, %B %-d, %Y").to_string();
 
     let r1_label = data.r1.heading.as_deref().unwrap_or("First Reading");
