@@ -4,6 +4,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use std::io::Cursor;
 use tower_http::trace::TraceLayer;
 use chrono::Utc;
 use chrono_tz::America::New_York;
@@ -39,6 +40,8 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index))
         .route("/health", get(health))
+        .route("/manifest.json", get(serve_manifest))
+        .route("/apple-touch-icon.png", get(serve_icon))
         .layer(TraceLayer::new_for_http());
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -49,6 +52,34 @@ async fn main() {
 
 async fn health() -> Json<Value> {
     Json(json!({"status": "ok"}))
+}
+
+fn generate_icon_png(hex: &str) -> Vec<u8> {
+    let hex = hex.trim_start_matches('#');
+    let r = u8::from_str_radix(hex.get(0..2).unwrap_or("64"), 16).unwrap_or(100);
+    let g = u8::from_str_radix(hex.get(2..4).unwrap_or("64"), 16).unwrap_or(100);
+    let b = u8::from_str_radix(hex.get(4..6).unwrap_or("64"), 16).unwrap_or(100);
+    let img = image::RgbImage::from_fn(180, 180, |_, _| image::Rgb([r, g, b]));
+    let mut buf = Vec::new();
+    img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png).unwrap_or(());
+    buf
+}
+
+async fn serve_icon() -> impl IntoResponse {
+    ([(header::CONTENT_TYPE, "image/png")], generate_icon_png("#8b1a1a"))
+}
+
+async fn serve_manifest() -> impl IntoResponse {
+    let body = json!({
+        "name": "Readings",
+        "short_name": "Readings",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#ffffff",
+        "theme_color": "#8b1a1a",
+        "icons": [{"src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}]
+    }).to_string();
+    ([(header::CONTENT_TYPE, "application/json")], body)
 }
 
 async fn index() -> Response {
@@ -191,11 +222,18 @@ fn render_html(data: &DayReadings) -> String {
     }
   </style>"#;
 
-    format!(r#"<!DOCTYPE html>
+    format!(r##"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#8b1a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Readings">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="icon" href="/apple-touch-icon.png">
   <title>{day}</title>
   {css}
 </head>
@@ -206,7 +244,7 @@ fn render_html(data: &DayReadings) -> String {
   </header>
 {sections}
 </body>
-</html>"#)
+</html>"##)
 }
 
 fn error_html(msg: &str) -> String {
